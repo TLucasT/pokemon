@@ -112,7 +112,7 @@ var initPokemon = function() {
 		this.timerMove = null;
 		var self = this;
 		this.timerMove = window.setInterval(function(){
-			self.moving(direction)
+			self.moving(direction);
 		},100);
 
 	};
@@ -475,7 +475,7 @@ var initPokemon = function() {
 		this.myPokemon = pokemon[0];
 		this.rivalPokemon = pokemon[1];
 		var self = this;
-		
+		Fight.updateRenderXp(self.myPokemon.xp,self.myPokemon.levelup	);
 		$('.screen .fight .panel').fadeIn(200, function(){
 			$('.my-pokemon .img').animate({
 				left : 0,
@@ -570,7 +570,11 @@ var initPokemon = function() {
 				$pokemonTeam.find('.img').animate({
 					top : 900
 				},function(){
-					Fight.stopFight();	
+					if(self.winner == 0) {
+						Fight.increaseXp();
+					} else {
+						Fight.stopFight();
+					}
 				});
 			});	
 		} else {
@@ -600,9 +604,110 @@ var initPokemon = function() {
 		this.panel.find('.rival-pokemon .img').css({left : 340, top : 0 ,opacity : 0});
 		this.panel.find('.rival-pokemon .life').css({width:100+'%'});
 		this.panel.find('.my-pokemon .img').css({left : -130, top : 65 ,opacity : 0});
+	};
+	
+	
+	/**
+	 * method : increaseXp()
+	 * @Docs : update l'xp du pokemon à la fin du combat
+	 */
+	FightConstructor.prototype.increaseXp = function () {
+		console.log('increase xp in db');
+		this.xpWin = null; 
+		this.xpWin = (this.rivalPokemon.level * this.myPokemon.level / 7)*50;
+		console.log('XP WIIN'+this.xpWin);
+		var self = this;
+
+		var newXp = parseInt(this.xpWin) + parseInt(this.myPokemon.xp);
+		$('.loader').text('Increase xp in db...');
+		$('.loader').fadeIn();
+		$.ajax({
+			type : 'GET',
+			url : 'request/update-xp.php?userid='+USERID+'&xp='+newXp,
+			dataType :'json',
+			success : function (e) {
+				$('.loader').fadeOut(900);
+				Dialogue.startDialogue(['Ouh yeah bébé on a gagné !!!!','Le pokemon gagne de l\'xp'],function(){
+					self.updateRenderXp(newXp,self.myPokemon.levelup);
+				});
+			},
+			error : function () {
+				console.log(arguments);
+			}
+		});
+	};
+	
+	
+	/**
+	 * method : updateRenderXp(int myPokemonXp, int xpRequire)
+	 * @Docs : update la barre de progression d'xp et init le pokemon avec les nouveaux params gagné pendant la fight
+	 */
+	FightConstructor.prototype.updateRenderXp = function (myPokemonXp,xpRequire) {
+		console.log('update render xp');
+		var progression = (myPokemonXp/xpRequire)*100;
+		if(progression >= 100){
+			this.levelUp(this.myPokemon.level,xpRequire,myPokemonXp);
+		} else {
+			$('.xp-block .xp-bar').animate({
+				width : progression+'%'
+			},1000);
+			Fight.stopFight();
+		}
+		Init.loadMyPokemon();
+	};
+	
+	/**
+	 * method : levelUp(int levelPokemon, int levelUp)
+	 * @Docs : level up  le pokemon et update la table xp et levelup
+	 */
+	FightConstructor.prototype.levelUp = function (levelPokemon,levelUp) {
+		console.log('level up');
+		var self = this;
+		var newLevel = (parseInt(levelPokemon))+1;
+		var newLevelUp = this.xpRequire(newLevel);
+		$('.loader').text('Update level db...');
+		$('.loader').fadeIn();
+		$.ajax({
+			type : 'GET',
+			url : 'request/update-level.php?userid='+USERID+'&level='+newLevel+'&levelup='+newLevelUp,
+			success : function (e) {
+				$('.loader').fadeOut(900);
+				$('.my-pokemon .level .value').text(newLevel);
+				Init.loadMyPokemon();
+				
+				$('.xp-block .xp-bar').animate({
+					width :'100%'
+					},100,function(){
+						$('.xp-block .xp-bar').css({width:'0%'});
+						Dialogue.startDialogue(['Ton pokemon augmente de niveau','son attaque sera encore plus puissante !'],function(){
+							$('.my-pokemon .level .value:last').text(newLevel);
+							Fight.stopFight();
+						});
+						
+					});
+					//Fight.stopFight();
+				
+				
+				
+
+				
+			},
+			error : function () {
+				console.log(arguments);
+			}
+		});
 	}
 	
-	
+	/**
+	 * method : xpRequire()
+	 * @Docs : xp requis pour level up
+	 * return result
+	 */
+	FightConstructor.prototype.xpRequire = function (levelPokemon) {
+		var result = (1,2*(levelPokemon*3)) - (15*(levelPokemon*2)) + (100*levelPokemon) - 140;
+		console.log(result);
+		return result;
+	}
 	
 	/**
 	 * method : stopFight()
@@ -611,7 +716,7 @@ var initPokemon = function() {
 	FightConstructor.prototype.stopFight = function () {
 		var self = this;
 		if(this.winner == 0) {
-			Dialogue.startDialogue(['Trooop cool vous avez gagné','Le pokemon va gagner un max de xp'],function(){
+			Dialogue.startDialogue(['Héhé !'],function(){
 				Sasha.sashaDiv.show();
 				self.panel.hide();
 				self.clearFight();
@@ -619,11 +724,10 @@ var initPokemon = function() {
 			
 				SoundCity = new SoundConstructor('pallet-town');
 				SoundCity.soundPlay();
-		});					
+			});					
 		} else if(this.winner == 1) {
 			Dialogue.startDialogue(['Oooooooooooh non on a perdu']);					
 		}
-	
 		
 	};
 
@@ -678,7 +782,7 @@ var initPokemon = function() {
 	
 	
 	/**
-	 * method : startDialog(array listDialog 
+	 * method : animation() 
 	 * @Docs : prend une liste de dialogues et les affiche à la chaine dans le bloc 
 	 */
 	DialogueConstructor.prototype.animation = function (){
@@ -870,6 +974,7 @@ var initPokemon = function() {
 		this.attack = stat.attack;
 		this.level = stat.level;
 		this.xp = stat.xp;
+		this.levelup = stat.levelup;
 		this.pv = stat.pv;
 		this.currentPV = stat.currentPV;
 	};
@@ -1002,7 +1107,7 @@ var initPokemon = function() {
 	 * return : 
 	 */
 	var InitConstructor = function Init() {
-		
+		var self = this;
 		Screen = new ScreenConstructor($('.screen'));
 		Sprite = new SpriteConstructor();
 		Control = new ControlConstructor();
@@ -1019,18 +1124,22 @@ var initPokemon = function() {
 		$('.pause').click(function(){SoundCity.soundPause()});
 		$('.play').click(function(){SoundCity.soundPlay()});
 		
-		this.loadMyPokemon();
 		
+	
+		
+		this.loadMyPokemon();
 		this.getRender();
-		var self = this;
+		
 
 		$.getJSON('json/pkm.json', function(listPkm) {
-			console.log(listPkm);
 			PKM = listPkm; 
 		});
+		
 		$.getJSON('json/attack.json', function(listAttack) {
 			ATTACK = listAttack; 
 		});
+		
+		
 		
 	};
 	
@@ -1041,13 +1150,14 @@ var initPokemon = function() {
 	 * @Docs : permet d'instancier mon pokemon 
 	 */
 	InitConstructor.prototype.loadMyPokemon = function () {
+		var self = this;
+		$('.loader').text('Reload pokemon...');
 		$('.loader').fadeIn();
 		$.ajax({
 			type : 'GET',
-			url : 'request/load-pokemon.php?userid='+1,
+			url : 'request/load-pokemon.php?userid='+USERID,
 			dataType :'json',
 			success : function (e) {
-				console.log(e);
 				Pokemon = new PokemonConstructor(
 					e.nom, 
 					[
@@ -1062,6 +1172,7 @@ var initPokemon = function() {
 						attack:e.attack,
 						level:e.level,
 						xp:e.xp,
+						levelup:e.levelup,
 						currentPV:e.currentpv,
 						pv:e.pv
 					}
@@ -1082,6 +1193,7 @@ var initPokemon = function() {
 	InitConstructor.prototype.updateRender = function (render) {
 		this.map = null;
 		var self = this;
+		$('.loader').text('Update render...');
 		$('.loader').fadeIn();
 		switch (render){
 		case 'city' : 
@@ -1096,7 +1208,7 @@ var initPokemon = function() {
 		}
 		$.ajax({
 			type : 'GET',
-			url : 'request/update-map.php?userid='+1+'&map='+render,
+			url : 'request/update-map.php?userid='+USERID+'&map='+render,
 			dataType :'json',
 			success : function (e) {
 				$('.loader').fadeOut(900);
@@ -1113,11 +1225,13 @@ var initPokemon = function() {
 	 * @Docs : permet d'obtenir le render au chargment de la page
 	 */
 	InitConstructor.prototype.getRender = function () {
+		console.log(USERID);
+		$('.loader').text('Get render...');
 		$('.loader').fadeIn();
 		$('.sasha').hide();
 		$.ajax({
 			type : 'GET',
-			url : 'request/init-render.php?userid='+1,
+			url : 'request/init-render.php?userid='+USERID,
 			dataType :'json',
 			success : function (e) {
 				switch (e.map){
@@ -1252,23 +1366,52 @@ var initPokemon = function() {
 	
 
 	
-	Init = new InitConstructor();
 	
 	
+/*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+	
+window.fbAsyncInit = function() {
+	console.log('INIT');
+	FB.init({
+		appId      : 355558234538834, // App ID
+		channelUrl : '//127.0.0.1:8888/RPG/channel.html', // Channel File
+		status     : true, // check login status
+		cookie     : true, // enable cookies to allow the server to access the session
+		xfbml      : true  // parse XFBML
+	});
+
+	// ADDITIONNAL CODE HERE
+	
+	//verifie le status de l'utilisateur
+	FB.getLoginStatus(function(response){
+		if(response.status != 'connected'){
+			//se connecter à facebook
+			FB.login(function(response){
+				if(response.authResponse){
+					window.location.reload();
+				}
+			}, {scope : 'email,user_likes'});
+		} else {	
+		
 			
+			FB.api('/me', function(response) {
+				USERID = response.id;
+				Init = new InitConstructor();
+			});
 			
-					
-	//xperience require	
-	var xp = function(e) {
-		var result = (1,2*(e*3)) - (15*(e*2)) + (100*e) - 140;
-		return result;
-	}
+		}
+		
+	});				
+										
+};
 	
-	//xp win 
-	var winXp = function(myLevel,rivalLevel) { 
-		var result = (rivalLevel * myLevel / 7);
-		return result;
-	}
+	
 	
 
 
